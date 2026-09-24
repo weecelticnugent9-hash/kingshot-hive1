@@ -13,9 +13,8 @@ RUN npm install --omit=dev
 # Copy the bot source.
 COPY . .
 
-# The roster and the editable map live here. Mount a volume at /app/data
-# to keep both across deploys.
-VOLUME ["/app/data"]
+# The roster and the editable map live here. Mount a Railway Volume at /app/data
+# (configure this in the Railway dashboard) to keep both across deploys.
 ENV HIVE_DATA_DIR=/app/data
 
 CMD ["node", "bot.js"]
