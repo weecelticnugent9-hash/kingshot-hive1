@@ -1,0 +1,15 @@
+# Railway configuration.
+# Railway reads this automatically. It tells Railway to build the Dockerfile
+# and keep restarting the bot if it ever crashes.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node bot.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Health check is intentionally omitted: a Discord bot opens no HTTP port,
+# so Railway should judge health purely by the process staying alive.
