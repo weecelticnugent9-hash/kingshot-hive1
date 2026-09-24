@@ -13,8 +13,7 @@ RUN npm install --omit=dev
 # Copy the bot source.
 COPY . .
 
-# The roster lives here. Mount a volume at /app/data to keep it across deploys.
-VOLUME ["/app/data"]
+# The roster lives here. Mount a Railway Volume at /app/data (configure in the Railway dashboard) to keep it across deploys.
 ENV HIVE_DB=/app/data/hive.json
 
 CMD ["node", "bot.js"]
