@@ -280,6 +280,7 @@ function costOf(materials, weights = MATERIAL_WEIGHTS) {
 }
 
 module.exports = {
-  CHARMS, FORGEHAMMER, GEAR_XP, GOV_GEAR, MATERIAL_WEIGHTS,
-  charmStep, forgehammerStep, gearXpAt, gearXpStep, govTier, govGearStep, costOf,
+  CHARMS, FORGEHAMMER, GEAR_XP, GEAR_STATS, GOV_GEAR, IMBUEMENT, MATERIAL_WEIGHTS,
+  charmStep, forgehammerStep, gearXpAt, gearXpStep, gearBonusAt,
+  govTier, govGearStep, costOf,
 };
