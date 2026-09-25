@@ -127,8 +127,12 @@ const commands = [
   new SlashCommandBuilder().setName('advisor').setDescription('What should this player upgrade next?')
     .addStringOption((o) => o.setName('governor_id').setDescription('Governor id (from their profile)').setRequired(true))
     .addIntegerOption((o) => o.setName('pieces').setDescription('Gear pieces they are actively pushing (for the Mithril threshold)').setMinValue(1).setMaxValue(12))
-    .addStringOption((o) => o.setName('mithril').setDescription('Mithril they currently hold, if you want the red-gear advice'))
-    .addStringOption((o) => o.setName('charm_levels').setDescription('Charm levels if known, e.g. "inf 5, arch 3, cav 3"')),
+    .addIntegerOption((o) => o.setName('mithril').setDescription('Mithril they currently hold, for the red-gear advice'))
+    .addIntegerOption((o) => o.setName('mythic_gear').setDescription('Mythic Gear they currently hold'))
+    .addIntegerOption((o) => o.setName('forgehammers').setDescription('Forgehammers they currently hold'))
+    .addIntegerOption((o) => o.setName('charm_guides').setDescription('Charm Guides they currently hold'))
+    .addIntegerOption((o) => o.setName('charm_designs').setDescription('Charm Designs they currently hold'))
+    .addStringOption((o) => o.setName('charms').setDescription('Charm levels, e.g. "inf 5, arch 3, cav 3"')),
 
   new SlashCommandBuilder().setName('add').setDescription('Add an object, blockage or bear to the hive map')
     .addStringOption((o) => o.setName('type').setDescription('What to add').setRequired(true).addChoices(...ENTITY_CHOICES))
