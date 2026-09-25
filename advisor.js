@@ -161,22 +161,27 @@ function candidates(state) {
   }
 
   // ------------------------------------------------------- red imbuement
-  for (const g of state.gear || []) {
-    if (g.quality !== 'red') continue;
-    const from = g.enhancement || 100;
-    const next = (T.IMBUEMENT.milestones.find((m) => m.at > from) || {}).at;
-    if (!next) continue;
-    const step = T.IMBUEMENT.stepTo(next);
-    out.push({
-      pool: 'red',
-      kind: 'imbuement',
-      label: `${g.troop} ${g.slot} imbuement → +${next}`,
-      materials: { mithril: step.mithril, mythicGear: step.mythicGear },
-      gain: 0.5 * (next - from),   // ~0.5% per level on the red curve
-      gainUnit: '% stat',
-      note: `Mithril milestone (+${next})`,
-      state: g,
-    });
+  // Disabled: this alliance is not chasing red-gear imbuement, so Mithril
+  // advice is noise. Flip this block back on to restore it.
+  const SHOW_IMBUEMENT = false;
+  if (SHOW_IMBUEMENT) {
+    for (const g of state.gear || []) {
+      if (g.quality !== 'red') continue;
+      const from = g.enhancement || 100;
+      const next = (T.IMBUEMENT.milestones.find((m) => m.at > from) || {}).at;
+      if (!next) continue;
+      const step = T.IMBUEMENT.stepTo(next);
+      out.push({
+        pool: 'red',
+        kind: 'imbuement',
+        label: `${g.troop} ${g.slot} imbuement → +${next}`,
+        materials: { mithril: step.mithril, mythicGear: step.mythicGear },
+        gain: 0.5 * (next - from),   // ~0.5% per level on the red curve
+        gainUnit: '% stat',
+        note: `Mithril milestone (+${next})`,
+        state: g,
+      });
+    }
   }
 
   // ------------------------------------------------- governor gear
