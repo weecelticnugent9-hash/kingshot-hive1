@@ -386,9 +386,46 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (sub === 'list') {
+      await interaction.deferReply({ ephemeral: true });
+      const roster = store.roster().sort((a, b) => (b.score || 0) - (a.score || 0));
+      const page = Math.max(1, interaction.options.getInteger('page') || 1);
+      const perPage = 18;
+      const pages = Math.max(1, Math.ceil(roster.length / perPage));
+      const slice = roster.slice((page - 1) * perPage, page * perPage);
+
+      const rows = slice.map((p) => {
+        const gov = p.governorId ? String(p.governorId) : '-';
+        return `\`${p.name.slice(0, 14).padEnd(14)}\` ${String(p.score != null ? p.score + 'm' : '?').padStart(6)}  ${p.group}  ${gov}`;
+      });
+
+      return interaction.editReply(
+        `**Roster** ${roster.length} players - page ${page}/${pages}\n` +
+        `\`name           score  bear  governor_id\`\n` +
+        (rows.length ? rows.join('\n') : '_no players on this page_') +
+        (pages > 1 ? `\n\n_Next: \`/hive list page:${Math.min(page + 1, pages)}\`_` : '')
+      );
+    }
+
+    if (sub === 'who') {
+      await interaction.deferReply({ ephemeral: true });
+      const needle = interaction.options.getString('name').trim().toLowerCase();
       const roster = store.roster();
-      const body = roster.map((p) => `\`${p.name.padEnd(12)}\` ${String(p.score + 'm').padStart(6)}  bear ${p.group}${p.locked ? '  [locked]' : ''}`);
-      return interaction.reply({ content: `**${roster.length} players**\n` + body.join('\n'), ephemeral: true });
+      const hits = roster.filter((p) => (p.name || '').toLowerCase().includes(needle));
+
+      if (!hits.length) {
+        return interaction.editReply(`No stored player matching **${interaction.options.getString('name')}**. Run \`/hive sync\` to pull the alliance from MightPulse.`);
+      }
+      if (hits.length > 12) {
+        return interaction.editReply(`**${hits.length}** matches - narrow it down. E.g. ${hits.slice(0, 6).map((h) => h.name).join(', ')}...`);
+      }
+
+      const blocks = hits.map((p) =>
+        `**${p.name}**\n` +
+        `governor_id: \`${p.governorId || 'unknown'}\`\n` +
+        `power ${(p.power || 0).toLocaleString()}  TC ${p.townCenter || '?'}  bear ${p.group}  score ${p.score != null ? p.score + 'm' : 'unset'}` +
+        (p.x != null ? `  spot ${p.x},${p.y}` : '')
+      );
+      return interaction.editReply(blocks.join('\n\n') + '\n\n_Copy the governor_id into `/advisor`._');
     }
 
     // =======================================================================
