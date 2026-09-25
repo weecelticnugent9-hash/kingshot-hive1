@@ -100,14 +100,28 @@ const GEAR_STATS = {
     if (q === 'mythic') return 15 + level * 0.35;
     return 9 + level * 0.21;
   },
-  /** Stat gain from one enhancement level to another. */
+  /**
+   * Stat gain from one enhancement level to another.
+   * NOTE: this must not rely on `this`. The advisor destructures tables and
+   * calls the helper standalone, which would leave `this` undefined.
+   */
   bonusStep(from, to, quality = 'auto') {
     return {
-      bonus: this.bonusAt(to, quality) - this.bonusAt(from, quality),
+      bonus: gearBonusAt(to, quality) - gearBonusAt(from, quality),
       from, to, quality,
     };
   },
 };
+
+/** Standalone so it works with or without an owning object. */
+function gearBonusAt(level, quality = 'auto') {
+  const q = quality === 'auto'
+    ? (level > 100 ? 'red' : level > 80 ? 'mythic' : 'epic')
+    : String(quality).toLowerCase();
+  if (q === 'red') return 50 + (level - 100) * 0.5;
+  if (q === 'mythic') return 15 + level * 0.35;
+  return 9 + level * 0.21;
+}
 
 // ---------------------------------------------------------------------------
 // Red gear imbuement: milestone costs from Mythic 100 to Red 200.
