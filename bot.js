@@ -98,7 +98,17 @@ const commands = [
       .addStringOption((o) => o.setName('anchor').setDescription('A visible coordinate on the image, e.g. X472 Y586').setRequired(true))
       .addNumberOption((o) => o.setName('tilepx').setDescription('Pixels per tile on your screenshot (measure one tile)').setRequired(true))
       .addNumberOption((o) => o.setName('anchorpx').setDescription('X pixel of that tile\'s bottom-left corner').setRequired(true))
-      .addNumberOption((o) => o.setName('anchorpy').setDescription('Y pixel of that tile\'s bottom-left corner').setRequired(true))),
+      .addNumberOption((o) => o.setName('anchorpy').setDescription('Y pixel of that tile\'s bottom-left corner').setRequired(true)))
+    .addSubcommand((s) => s.setName('sync').setDescription('Pull your alliance roster from MightPulse and update power/activity')
+      .addBooleanOption((o) => o.setName('create').setDescription('Also create players who are not in the roster yet')))
+    .addSubcommand((s) => s.setName('spots').setDescription('Read every member\'s map coordinates from MightPulse'))
+    .addSubcommand((s) => s.setName('pulse').setDescription('Test the MightPulse connection and show the rate-limit usage')),
+
+  new SlashCommandBuilder().setName('advisor').setDescription('What should this player upgrade next?')
+    .addStringOption((o) => o.setName('governor_id').setDescription('Governor id (from their profile)').setRequired(true))
+    .addIntegerOption((o) => o.setName('pieces').setDescription('Gear pieces they are actively pushing (for the Mithril threshold)').setMinValue(1).setMaxValue(12))
+    .addStringOption((o) => o.setName('mithril').setDescription('Mithril they currently hold, if you want the red-gear advice'))
+    .addStringOption((o) => o.setName('charm_levels').setDescription('Charm levels if known, e.g. "inf 5, arch 3, cav 3"')),
 
   new SlashCommandBuilder().setName('add').setDescription('Add an object, blockage or bear to the hive map')
     .addStringOption((o) => o.setName('type').setDescription('What to add').setRequired(true).addChoices(...ENTITY_CHOICES))
