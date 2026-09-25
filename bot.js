@@ -39,6 +39,8 @@ const { createStore } = require('./store');
 const { createMapStore } = require('./mapstore');
 const { renderPNG, renderText } = require('./render');
 const { renderOverlay } = require('./overlay');
+const { createPulse } = require('./pulse');
+const advisor = require('./advisor');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
