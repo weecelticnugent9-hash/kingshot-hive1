@@ -290,6 +290,71 @@ client.on('interactionCreate', async (interaction) => {
       });
     }
 
+    // =======================================================================
+    // Advisor: what to upgrade next
+    // =======================================================================
+    if (interaction.commandName === 'advisor') {
+      await interaction.deferReply();
+
+      const client2 = getPulse();
+      if (!client2) {
+        return interaction.editReply('MIGHTPULSE_KEY is not set. Add it in Railway, then restart the service.');
+      }
+
+      const governorId = interaction.options.getString('governor_id');
+      const pieces = interaction.options.getInteger('pieces') || 2;
+
+      // Materials the API does not expose come from the options.
+      const materials = {
+        mithril: interaction.options.getInteger('mithril') || 0,
+        mythicGear: interaction.options.getInteger('mythic_gear') || 0,
+        forgehammers: interaction.options.getInteger('forgehammers') || 0,
+        charmGuides: interaction.options.getInteger('charm_guides') || 0,
+        charmDesigns: interaction.options.getInteger('charm_designs') || 0,
+      };
+
+      // Charm levels are typed: "inf 5, arch 3, cav 3"
+      const charms = [];
+      const charmText = interaction.options.getString('charms');
+      if (charmText) {
+        for (const part of charmText.split(/[,;]/)) {
+          const m = part.trim().match(/^([a-z]+)\D*(\d+)/i);
+          if (!m) continue;
+          const troop = m[1].toLowerCase().startsWith('inf') ? 'Infantry'
+            : m[1].toLowerCase().startsWith('arc') ? 'Archer'
+              : m[1].toLowerCase().startsWith('cav') ? 'Cavalry' : m[1];
+          charms.push({ troop, level: Number(m[2]) });
+        }
+      }
+
+      let response;
+      try {
+        response = await client2.player(governorId, ['base', 'heroes', 'gov_gear']);
+      } catch (err) {
+        return interaction.editReply(`Could not read governor **${governorId}** from MightPulse: ${err.message}`);
+      }
+
+      const base = response.player || {};
+      const state = advisor.stateFromPulse(response, { charms, materials, piecesPushing: pieces });
+
+      if (!state.gear.length) {
+        return interaction.editReply(
+          `Read **${base.nick_name || governorId}** but no hero gear came back, so there is nothing to advise on.\n` +
+          `MightPulse may not hold gear for this player yet.`
+        );
+      }
+
+      const result = advisor.advise(state, { limit: 5 });
+
+      return interaction.editReply(
+        `**${base.nick_name || governorId}** - ${(base.power || 0).toLocaleString()} power, ` +
+        `TC ${base.town_center_level || '?'}\n` +
+        `Gear read: ${state.gear.length} piece(s), governor gear: ${state.govGear.length} piece(s)` +
+        (charms.length ? `, charms: ${charms.length}` : ', charms: none supplied') + `\n\n` +
+        advisor.formatAdvice(result, state)
+      );
+    }
+
     if (interaction.commandName !== 'hive') return;
     const sub = interaction.options.getSubcommand();
 
