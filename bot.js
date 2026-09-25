@@ -17,6 +17,7 @@
  *   /hive lock     name spot [unlock]
  *   /hive import   text                                 - bulk roster upsert
  *   /hive map                                           - show the map and lint it
+ *   /hive overlay  image anchor tilepx                  - draw your map over a screenshot
  *
  *   /add    object|blockage|bear   x y [size] [name] [overwrite]
  *   /move   object|blockage|bear   x y [name]
@@ -37,6 +38,7 @@ const hive = require('./hive');
 const { createStore } = require('./store');
 const { createMapStore } = require('./mapstore');
 const { renderPNG, renderText } = require('./render');
+const { renderOverlay } = require('./overlay');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
@@ -90,7 +92,13 @@ const commands = [
       .addBooleanOption((o) => o.setName('unlock').setDescription('Set true to release the lock')))
     .addSubcommand((s) => s.setName('import').setDescription('Bulk upsert from pasted lines')
       .addStringOption((o) => o.setName('text').setDescription('One player per line: Name 100m Bear 1').setRequired(true)))
-    .addSubcommand((s) => s.setName('map').setDescription('Show the hive map: bears, objects, blocked areas and free spots')),
+    .addSubcommand((s) => s.setName('map').setDescription('Show the hive map: bears, objects, blocked areas and free spots'))
+    .addSubcommand((s) => s.setName('overlay').setDescription('Draw your stored map over a screenshot to check it matches')
+      .addAttachmentOption((o) => o.setName('image').setDescription('Screenshot of the hive area (PNG)').setRequired(true))
+      .addStringOption((o) => o.setName('anchor').setDescription('A visible coordinate on the image, e.g. X472 Y586').setRequired(true))
+      .addNumberOption((o) => o.setName('tilepx').setDescription('Pixels per tile on your screenshot (measure one tile)').setRequired(true))
+      .addNumberOption((o) => o.setName('anchorpx').setDescription('X pixel of that tile\'s bottom-left corner').setRequired(true))
+      .addNumberOption((o) => o.setName('anchorpy').setDescription('Y pixel of that tile\'s bottom-left corner').setRequired(true))),
 
   new SlashCommandBuilder().setName('add').setDescription('Add an object, blockage or bear to the hive map')
     .addStringOption((o) => o.setName('type').setDescription('What to add').setRequired(true).addChoices(...ENTITY_CHOICES))
@@ -286,10 +294,58 @@ client.on('interactionCreate', async (interaction) => {
     // Map inspection
     // =======================================================================
     if (sub === 'map') {
-      const lint = mapStore.check();
       return interaction.reply({
         content: mapStore.describe() + `\n\n_Free spots shown are 2x2 city slots. Need at least as many as you have players (${store.roster().length})._`,
         ephemeral: true,
+      });
+    }
+
+    // =======================================================================
+    // Overlay: draw the stored map over a screenshot
+    // =======================================================================
+    if (sub === 'overlay') {
+      await interaction.deferReply();
+      const attachment = interaction.options.getAttachment('image');
+      const anchorCoord = parseSpot(interaction.options.getString('anchor'));
+      if (!anchorCoord) {
+        return interaction.editReply('Could not read the anchor. Use `X472 Y586`.');
+      }
+      const tilePx = interaction.options.getNumber('tilepx');
+      const anchorPx = interaction.options.getNumber('anchorpx');
+      const anchorPy = interaction.options.getNumber('anchorpy');
+
+      if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
+        return interaction.editReply('That attachment is not an image.');
+      }
+      if (attachment.contentType === 'image/jpeg') {
+        return interaction.editReply(
+          'That is a JPEG, and Discord converts screenshots to JPEG on upload. ' +
+          'Send it as a PNG file instead - on iOS, use Share → Save to Files first, or re-save it as PNG.'
+        );
+      }
+      if (attachment.size > 8 * 1024 * 1024) {
+        return interaction.editReply('That image is larger than 8 MB. Crop it to the hive area and try again.');
+      }
+
+      const res = await fetch(attachment.url);
+      const bytes = Buffer.from(await res.arrayBuffer());
+
+      const out = renderOverlay(bytes, mapStore.get(), {
+        x: anchorCoord.x,
+        y: anchorCoord.y,
+        px: anchorPx,
+        py: anchorPy,
+        tilePx,
+      }, { players: store.roster().filter((p) => p.x != null && p.y != null) });
+
+      const file = new AttachmentBuilder(out.png, { name: 'hive-overlay.png' });
+      return interaction.editReply({
+        content:
+          `Drew **${out.drawn.objects}** object(s), **${out.drawn.blocked}** blockage(s), **${out.drawn.bears}** bear(s)` +
+          (out.drawn.players ? ` and **${out.drawn.players}** stored player spot(s)` : '') +
+          ` over your ${out.imageSize.width}x${out.imageSize.height} image.\n` +
+          `The **red box** marks the anchor - if it is not sitting on the tile you named, adjust \`anchorpx\`/\`anchorpy\` or \`tilepx\` and run it again.`,
+        files: [file],
       });
     }
 
