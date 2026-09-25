@@ -45,11 +45,31 @@ const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 const HUB_CHANNEL_ID = process.env.HIVE_CHANNEL_ID;
 
+// Your alliance, used as the default for /hive sync and /hive spots.
+const KID = Number(process.env.HIVE_KID || 511);
+const TAG = process.env.HIVE_TAG || 'FAr';
+
 if (!TOKEN) { console.error('Missing DISCORD_TOKEN'); process.exit(1); }
 
 const DATA_DIR = process.env.HIVE_DATA_DIR || path.join(__dirname, 'data');
 const store = createStore(process.env.HIVE_DB || path.join(DATA_DIR, 'hive.json'));
 const mapStore = createMapStore(process.env.HIVE_MAP || path.join(DATA_DIR, 'map.json'));
+
+// MightPulse is optional: without the key the bot runs, and only the
+// pulse-powered commands report that it is unavailable.
+let pulseClient = null;
+function getPulse() {
+  if (pulseClient) return pulseClient;
+  const key = process.env.MIGHTPULSE_KEY;
+  if (!key) return null;
+  try {
+    pulseClient = createPulse(key, { cacheFile: path.join(DATA_DIR, 'pulse-cache.json') });
+    return pulseClient;
+  } catch (err) {
+    console.error('MightPulse init failed:', err.message);
+    return null;
+  }
+}
 
 // Restrict map edits to people you trust. Leave empty to allow anyone.
 const EDITOR_ROLE_IDS = (process.env.HIVE_EDITOR_ROLES || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -357,6 +377,131 @@ client.on('interactionCreate', async (interaction) => {
           `The **red box** marks the anchor - if it is not sitting on the tile you named, adjust \`anchorpx\`/\`anchorpy\` or \`tilepx\` and run it again.`,
         files: [file],
       });
+    }
+
+    // =======================================================================
+    // MightPulse: connection test
+    // =======================================================================
+    if (sub === 'pulse') {
+      await interaction.deferReply({ ephemeral: true });
+      const client2 = getPulse();
+      if (!client2) {
+        return interaction.editReply('MIGHTPULSE_KEY is not set. Add it in Railway, then restart the service.');
+      }
+      try {
+        const k = await client2.kingdom(KID);
+        return interaction.editReply(
+          `MightPulse is reachable.\n` +
+          `Kingdom **${KID}**: ${(k.name || 'unnamed')} - ${k.player_count ?? '?'} players, ${k.alliance_count ?? '?'} alliances.\n` +
+          `Requests this minute: **${client2.rateStats.lastMinute}/60**, today: **${client2.rateStats.today}/5000**.`
+        );
+      } catch (err) {
+        return interaction.editReply(`MightPulse call failed: ${err.message}`);
+      }
+    }
+
+    // =======================================================================
+    // MightPulse: roster sync (roster first, positions separate)
+    // =======================================================================
+    if (sub === 'sync') {
+      await interaction.deferReply();
+      const client2 = getPulse();
+      if (!client2) {
+        return interaction.editReply('MIGHTPULSE_KEY is not set. Add it in Railway, then restart the service.');
+      }
+
+      const tag = interaction.options.getString('tag') || TAG;
+      const kid = interaction.options.getInteger('kingdom') || KID;
+      const create = interaction.options.getBoolean('create') !== false;
+
+      let members;
+      try {
+        members = await client2.roster(kid, tag);
+      } catch (err) {
+        return interaction.editReply(
+          `Could not read alliance **${tag}** in kingdom **${kid}**: ${err.message}\n` +
+          `Check the tag is the in-game abbreviation (case-sensitive) and the kingdom id is right.`
+        );
+      }
+      if (!members.length) {
+        return interaction.editReply(`Alliance **${tag}** in kingdom **${kid}** returned no members. Check the tag.`);
+      }
+
+      const before = store.roster();
+      const known = new Set(before.map((p) => p.name.toLowerCase()));
+      let created = 0, updated = 0;
+      const addedNames = [];
+
+      for (const m of members) {
+        const isNew = !known.has(m.name.toLowerCase());
+        if (isNew && !create) continue;
+        store.upsert({
+          name: m.name,
+          ...(isNew ? { group: '1' } : {}),
+          power: m.power,
+          townCenter: m.townCenter,
+          kills: m.kills,
+          rank: m.rankLabel,
+          lastActive: m.lastActive,
+          governorId: String(m.governorId || ''),
+        });
+        if (isNew) { created++; addedNames.push(m.name); } else { updated++; }
+      }
+
+      const after = store.roster();
+      return interaction.editReply(
+        `Synced **${tag}** (kingdom ${kid}) from MightPulse.\n` +
+        `**${members.length}** members found - ${created} added, ${updated} updated.\n` +
+        `Roster now holds **${after.length}** players.\n` +
+        (addedNames.length ? `New: ${addedNames.slice(0, 20).join(', ')}${addedNames.length > 20 ? ` +${addedNames.length - 20} more` : ''}\n` : '') +
+        `\nBear scores are not in the API, so set those with \`/hive import\` or \`/hive score\`. ` +
+        `Run \`/hive spots\` separately to pull map coordinates.`
+      );
+    }
+
+    // =======================================================================
+    // MightPulse: coordinates
+    // =======================================================================
+    if (sub === 'spots') {
+      await interaction.deferReply();
+      const client2 = getPulse();
+      if (!client2) {
+        return interaction.editReply('MIGHTPULSE_KEY is not set. Add it in Railway, then restart the service.');
+      }
+
+      const tag = interaction.options.getString('tag') || TAG;
+      const kid = interaction.options.getInteger('kingdom') || KID;
+
+      let members;
+      try {
+        members = await client2.roster(kid, tag);
+      } catch (err) {
+        return interaction.editReply(`Could not read alliance **${tag}**: ${err.message}`);
+      }
+
+      const found = [];
+      const missing = [];
+      for (const m of members) {
+        try {
+          const res = await client2.player(m.governorId, ['base']);
+          const pl = res.player || {};
+          if (pl.x != null && pl.y != null) {
+            store.upsert({ name: m.name, x: pl.x, y: pl.y, governorId: String(m.governorId || '') });
+            found.push(`${m.name} ${pl.x},${pl.y}`);
+          } else {
+            missing.push(m.name);
+          }
+        } catch (err) {
+          missing.push(m.name);
+        }
+      }
+
+      return interaction.editReply(
+        `Read coordinates for **${found.length}** of **${members.length}** members.\n` +
+        (found.length ? '```\n' + found.slice(0, 25).join('\n') + (found.length > 25 ? `\n+${found.length - 25} more` : '') + '\n```\n' : '') +
+        (missing.length ? `No coordinates returned for: ${missing.slice(0, 15).join(', ')}${missing.length > 15 ? ` +${missing.length - 15} more` : ''}\n` : '') +
+        `\nRun \`/hive plan\` - stored spots are now used by the planner.`
+      );
     }
 
     // =======================================================================
