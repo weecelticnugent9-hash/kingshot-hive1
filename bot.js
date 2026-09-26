@@ -683,14 +683,18 @@ client.on('interactionCreate', async (interaction) => {
     // =======================================================================
     if (sub === 'plan') {
       await interaction.deferReply();
+      const t0 = Date.now();
       const result = runPlan();
+      const t1 = Date.now();
       const png = renderPNG(result, { title: 'Kingshot hive plan' });
+      const t2 = Date.now();
       const file = new AttachmentBuilder(png, { name: 'hive-plan.png' });
       const seatNote = result.minScore != null
         ? `Seating **${result.seated}** players above **${result.minScore}m** - ${result.excluded} left out.\n`
         : '';
+      const timing = `_solve ${t1 - t0}ms · render ${t2 - t1}ms · ${png.length} bytes_\n`;
       return interaction.editReply({
-        content: `**Draft layout** - ${result.assignments.length} players\n${seatNote}${renderText(result)}`,
+        content: `**Draft layout** - ${result.assignments.length} players\n${seatNote}${timing}${renderText(result)}`,
         files: [file],
       });
     }
