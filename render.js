@@ -191,24 +191,45 @@ function renderPNG(result, opts = {}) {
     c.stroke(px(x), py(y), tile, tile, [241, 245, 249], 1);
   }
 
-  const drawBox = (x, y, w, h, pal, lines) => {
+  // Text must FIT the box. A 2x2 city is 2*tile wide; anything wider than
+  // that spills across the neighbouring cells and makes the grid look like
+  // the cities overlap. Truncate to the available width, and drop lines that
+  // would not fit at all.
+  const GLYPH_W = 6; // each glyph is 5px wide + 1px gap
+  const fit = (text, maxPx) => {
+    const maxChars = Math.max(1, Math.floor(maxPx / GLYPH_W));
+    const s = String(text).toUpperCase();
+    return s.length <= maxChars ? s : s.slice(0, Math.max(1, maxChars - 1)) + '.';
+  };
+
+  const drawBox = (x, y, w, h, pal, lines, opts2 = {}) => {
     const left = px(x), top = py(y + h), bw = w * tile, bh = h * tile;
     c.rect(left + 1, top + 1, bw - 2, bh - 2, [...pal.fill, 255]);
     c.stroke(left, top, bw, bh, [...pal.stroke, 255], 2);
-    lines.forEach((line, i) => {
-      const text = String(line).toUpperCase();
-      const tw = text.length * 6 - 1;
-      c.text(text, Math.round(left + (bw - tw) / 2), top + 14 + i * 16, [...pal.text, 255], 1);
+
+    const inner = bw - 6;                      // keep clear of the border
+    const rows = lines.filter(Boolean).map((l) => fit(l, inner));
+    const lineH = 16;
+    const startY = Math.round(top + (bh - rows.length * lineH) / 2) + 4;
+
+    rows.forEach((text, i) => {
+      const tw = text.length * GLYPH_W - 1;
+      if (tw > inner) return;                  // never draw outside the box
+      c.text(text, Math.round(left + (bw - tw) / 2), startY + i * lineH, [...pal.text, 255], 1);
     });
   };
 
   for (const a of assignments) {
     const key = require('./hive').isDual(a.player) ? 'both' : String(a.player.group || '1');
     const pal = PALETTE[key] || PALETTE['1'];
-    const score = a.player.score >= 1000 ? `${(a.player.score / 1000).toFixed(a.player.score % 1000 ? 1 : 0)}B` : `${a.player.score}M`;
-    drawBox(a.spot.x, a.spot.y, 2, 2, pal, [a.player.name, score, `${a.spot.x},${a.spot.y}`]);
+    const score = a.player.score >= 1000
+      ? `${(a.player.score / 1000).toFixed(a.player.score % 1000 ? 1 : 0)}B`
+      : `${a.player.score}M`;
+    // Name and score only. The coordinate lived in the same line and pushed
+    // the label past the box edge, which is what caused the overlap.
+    drawBox(a.spot.x, a.spot.y, 2, 2, pal, [a.player.name, score]);
   }
-  for (const b of map.bears) drawBox(b.anchorX, b.anchorY, b.w || 3, b.h || 3, PALETTE.bear, [b.name]);
+  for (const b of map.bears) drawBox(b.x != null ? b.x : b.anchorX, b.y != null ? b.y : b.anchorY, b.w || 3, b.h || 3, PALETTE.bear, [b.name]);
   for (const o of map.fixedObjects) drawBox(o.x, o.y, o.w || 2, o.h || 2, PALETTE.fixed, []);
 
   // Title + legend
