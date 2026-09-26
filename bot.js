@@ -433,6 +433,67 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =======================================================================
+    // Duplicates: find and optionally merge near-identical names
+    // =======================================================================
+    if (sub === 'dupes') {
+      await interaction.deferReply({ ephemeral: true });
+      const doMerge = interaction.options.getBoolean('merge');
+      const roster = store.roster();
+      const groups = findDuplicates(roster);
+
+      if (!groups.length) {
+        return interaction.editReply(`No likely duplicates in **${roster.length}** players. Roster is clean.`);
+      }
+
+      const lines = groups.map((g, i) => {
+        const survivor = pickSurvivor(g.names, roster);
+        return `${i + 1}. ${g.names.join(' / ')}${doMerge ? `  -> keeping **${survivor}**` : ''}`;
+      });
+
+      if (!doMerge) {
+        return interaction.editReply(
+          `**${groups.length} duplicate group(s)** in ${roster.length} players:\n` +
+          lines.slice(0, 20).join('\n') +
+          `\n\nReview, then run \`/hive dupes merge:true\` to keep one from each group.`
+        );
+      }
+
+      let merged = 0;
+      for (const g of groups) {
+        const keep = pickSurvivor(g.names, roster);
+        for (const name of g.names) {
+          if (name === keep) continue;
+          if (store.remove(name)) merged++;
+        }
+      }
+
+      const after = store.roster().length;
+      return interaction.editReply(
+        `Merged **${groups.length}** group(s), removed ${merged} duplicate entry/entries.\n` +
+        `Roster: **${roster.length} -> ${after}** players.\n\n` +
+        lines.slice(0, 20).join('\n')
+      );
+    }
+
+    // =======================================================================
+    // Cap: how many players the planner seats
+    // =======================================================================
+    if (sub === 'cap') {
+      const requested = interaction.options.getInteger('players');
+      const policy = hive.POLICY;
+      policy.maxPlayers = requested === 0 ? null : requested;
+
+      // The cap lives in the policy object, which hive.js exports, so setting it
+      // here changes the next plan without touching the file.
+      return interaction.reply({
+        content: requested === 0
+          ? 'Plan cap removed - the planner will seat everyone who qualifies.'
+          : `Plan cap set to **${requested}** players. The layout will seat the top ${requested} by priority and list the rest as capped.`,
+        ephemeral: true,
+      });
+    }
+
+    // =======================================================================
     // Map inspection
     // =======================================================================
     if (sub === 'map') {
