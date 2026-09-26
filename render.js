@@ -163,8 +163,10 @@ const PALETTE = {
 };
 
 function renderPNG(result, opts = {}) {
-  const tile = opts.tile || 40;
-  const pad = opts.pad || 28;
+  // 64px per tile makes a 2x2 city 128px wide - enough room for a full player
+  // name at readable size. Anything smaller truncates to initials.
+  const tile = opts.tile || 64;
+  const pad = opts.pad || 40;
   const { map, assignments } = result;
 
   const items = [
@@ -224,12 +226,15 @@ function renderPNG(result, opts = {}) {
     c.stroke(left, top, bw, bh, [...pal.stroke, 255], 2);
 
     if (labels && labels.length) {
-      const scale = tile >= 44 ? 2 : 1;
-      let ly = top + Math.round((bh - labels.length * (7 * scale + 10)) / 2) + 4;
+      // Full-size glyphs so names are actually readable. The plate spans the
+      // box width, so a 64px tile gives ~19 characters of room.
+      const scale = 2;
+      const lineH = 7 * scale + 10;
+      let ly = top + Math.round((bh - labels.length * lineH) / 2) + 4;
       for (const line of labels) {
         if (!line) continue;
-        drawLabel(line, left + 4, ly, scale, pal.stroke, bw);
-        ly += 7 * scale + 10;
+        drawLabel(line, left + 4, ly, scale, pal.stroke, bw - 8);
+        ly += lineH;
       }
     }
   };
