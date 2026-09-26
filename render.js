@@ -163,8 +163,8 @@ const PALETTE = {
 };
 
 function renderPNG(result, opts = {}) {
-  const tile = opts.tile || 56;
-  const pad = opts.pad || 48;
+  const tile = opts.tile || 40;
+  const pad = opts.pad || 28;
   const { map, assignments } = result;
 
   const items = [
@@ -180,21 +180,26 @@ function renderPNG(result, opts = {}) {
   const cols = maxX - minX + 2;
   const rows = maxY - minY + 2;
   const width = pad * 2 + cols * tile;
-  const height = pad * 2 + rows * tile + 40;
+  const height = pad * 2 + rows * tile + 34;
 
   const c = createCanvas(width, height);
   const px = (x) => pad + (x - minX + 1) * tile;
   const py = (y) => pad + (maxY + 1 - y) * tile;
 
-  // Grid
-  for (let x = minX - 1; x <= maxX + 1; x++) for (let y = minY - 1; y <= maxY + 1; y++) {
-    c.stroke(px(x), py(y), tile, tile, [241, 245, 249], 1);
+  // Grid. One rect per tile is a lot of individual pixel writes on a large
+  // canvas, so draw the full grid as horizontal/vertical lines instead:
+  // ~2 * (cols + rows) strips rather than cols * rows squares.
+  const gridL = [241, 245, 249];
+  const gridTop = py(maxY + 1), gridBottom = py(minY - 1) + tile;
+  for (let x = minX - 1; x <= maxX + 1; x++) {
+    c.rect(px(x), gridTop, 1, gridBottom - gridTop, gridL);
+  }
+  for (let y = minY - 1; y <= maxY + 1; y++) {
+    c.rect(px(minX - 1), py(y), px(maxX + 1) + tile - px(minX - 1), 1, gridL);
   }
 
-  // Text must FIT the box. A 2x2 city is 2*tile wide; anything wider than
-  // that spills across the neighbouring cells and makes the grid look like
-  // the cities overlap. Truncate to the available width, and drop lines that
-  // would not fit at all.
+  // Labels in the game's own style: a dark plate with white text and a
+  // coloured left edge, which reads far better than tinted text on a fill.
   const GLYPH_W = 6; // each glyph is 5px wide + 1px gap
   const fit = (text, maxPx) => {
     const maxChars = Math.max(1, Math.floor(maxPx / GLYPH_W));
@@ -202,21 +207,31 @@ function renderPNG(result, opts = {}) {
     return s.length <= maxChars ? s : s.slice(0, Math.max(1, maxChars - 1)) + '.';
   };
 
-  const drawBox = (x, y, w, h, pal, lines, opts2 = {}) => {
+  /** Text on a solid dark plate, so it stays readable over any fill. */
+  const drawLabel = (text, x, y, scale, accent, maxPx) => {
+    const t = fit(text, Math.max(12, maxPx - 14));
+    const w = t.length * GLYPH_W * scale + 12;
+    const h = 7 * scale + 8;
+    c.rect(x, y, w, h, [26, 32, 44, 255]);
+    if (accent) c.rect(x, y, 3, h, [...accent, 255]);
+    c.text(t, x + 7, y + 4, [255, 255, 255, 255], scale);
+    return { w, h };
+  };
+
+  const drawBox = (x, y, w, h, pal, labels) => {
     const left = px(x), top = py(y + h), bw = w * tile, bh = h * tile;
     c.rect(left + 1, top + 1, bw - 2, bh - 2, [...pal.fill, 255]);
     c.stroke(left, top, bw, bh, [...pal.stroke, 255], 2);
 
-    const inner = bw - 6;                      // keep clear of the border
-    const rows = lines.filter(Boolean).map((l) => fit(l, inner));
-    const lineH = 16;
-    const startY = Math.round(top + (bh - rows.length * lineH) / 2) + 4;
-
-    rows.forEach((text, i) => {
-      const tw = text.length * GLYPH_W - 1;
-      if (tw > inner) return;                  // never draw outside the box
-      c.text(text, Math.round(left + (bw - tw) / 2), startY + i * lineH, [...pal.text, 255], 1);
-    });
+    if (labels && labels.length) {
+      const scale = tile >= 44 ? 2 : 1;
+      let ly = top + Math.round((bh - labels.length * (7 * scale + 10)) / 2) + 4;
+      for (const line of labels) {
+        if (!line) continue;
+        drawLabel(line, left + 4, ly, scale, pal.stroke, bw);
+        ly += 7 * scale + 10;
+      }
+    }
   };
 
   for (const a of assignments) {
@@ -225,12 +240,12 @@ function renderPNG(result, opts = {}) {
     const score = a.player.score >= 1000
       ? `${(a.player.score / 1000).toFixed(a.player.score % 1000 ? 1 : 0)}B`
       : `${a.player.score}M`;
-    // Name and score only. The coordinate lived in the same line and pushed
-    // the label past the box edge, which is what caused the overlap.
     drawBox(a.spot.x, a.spot.y, 2, 2, pal, [a.player.name, score]);
   }
-  for (const b of map.bears) drawBox(b.x != null ? b.x : b.anchorX, b.y != null ? b.y : b.anchorY, b.w || 3, b.h || 3, PALETTE.bear, [b.name]);
-  for (const o of map.fixedObjects) drawBox(o.x, o.y, o.w || 2, o.h || 2, PALETTE.fixed, []);
+  for (const b of map.bears) {
+    drawBox(b.x != null ? b.x : b.anchorX, b.y != null ? b.y : b.anchorY, b.w || 3, b.h || 3, PALETTE.bear, [b.name]);
+  }
+  for (const o of map.fixedObjects) drawBox(o.x, o.y, o.w || 2, o.h || 2, PALETTE.fixed, o.name ? [o.name] : []);
 
   // Title + legend
   c.text(opts.title || 'Kingshot hive plan', pad, 16, [23, 36, 58, 255], 2);
