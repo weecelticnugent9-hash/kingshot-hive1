@@ -388,7 +388,7 @@ function planHive(players, opts = {}) {
   const minScore = policy.minScore != null ? policy.minScore : null;
   const eligible = minScore == null
     ? players
-    : players.filter((p) => (Number(p.score) || 0) > minScore);
+    : players.filter((p) => (Number(p.score) || 0) >= minScore);
 
   const excluded = players.length - eligible.length;
   if (!eligible.length) {
