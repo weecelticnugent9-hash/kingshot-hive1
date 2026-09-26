@@ -299,7 +299,12 @@ function assign(ranked, spots, map, policy = POLICY) {
       }
     }
     // Relocate a player into a still-free spot if that is cheaper.
-    const free = spots.filter((s) => !assigned.some((a) => a.spot.x === s.x && a.spot.y === s.y));
+    //
+    // Two cities at different anchors can still share a tile (479,587 vs
+    // 480,586 overlap), so "free" must use the rectangle test - not an
+    // equality check on x and y, which would call both of those spots free
+    // and drop a player onto occupied ground.
+    const free = spots.filter((s) => !assigned.some((a) => rectsOverlap(a.spot, s)));
     for (const a of assigned) {
       if (a.player.locked) continue;
       const now = costOf(a.player, a.spot);
@@ -310,7 +315,11 @@ function assign(ranked, spots, map, policy = POLICY) {
       }
       if (best) {
         a.spot = best.s; a.travel = travelCost(a.player, a.spot, map, policy);
-        free.splice(free.findIndex((f) => f.x === best.s.x && f.y === best.s.y), 1);
+        // Remove every candidate this placement now overlaps, not just the
+        // exact anchor, so the next relocation cannot land on top of it.
+        for (let i = free.length - 1; i >= 0; i--) {
+          if (rectsOverlap(free[i], a.spot)) free.splice(i, 1);
+        }
         improved = true;
       }
     }
