@@ -41,6 +41,7 @@ const { renderPNG, renderText } = require('./render');
 const { renderOverlay } = require('./overlay');
 const { createPulse } = require('./pulse');
 const advisor = require('./advisor');
+const { findDuplicates, pickSurvivor } = require('./dupes');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
