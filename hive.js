@@ -53,6 +53,11 @@ const MAP = {
 // ---------------------------------------------------------------------------
 
 const POLICY = {
+  // Only seat players scoring above this (millions). null = seat everyone.
+  // Set to 200 so the layout covers players who actually run bear, and the
+  // rest of a 97-strong alliance is left out.
+  minScore: 200,
+
   // Priors used when a player has no history yet. Scale: 0..1.
   defaultActivity: 0.5,
 
