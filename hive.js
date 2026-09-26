@@ -406,7 +406,22 @@ function planHive(players, opts = {}) {
     );
   }
 
-  const ranked = rankPlayers(eligible, policy);
+  // Hard ceiling on how many players are seated.
+  //
+  // The solver scores every player against every candidate spot, so cost grows
+  // with players x spots, and the repair pass is quadratic in the seated count.
+  // At 100+ players an unbounded plan takes minutes and blows past Discord's
+  // interaction window. Capping by priority keeps the plan both fast and
+  // meaningful - the players who matter are seated, the rest are listed as
+  // excluded rather than silently dropped.
+  const maxPlayers = policy.maxPlayers != null ? policy.maxPlayers : 60;
+  let ranked = rankPlayers(eligible, policy);
+  let cappedOut = [];
+  if (maxPlayers > 0 && ranked.length > maxPlayers) {
+    cappedOut = ranked.slice(maxPlayers);
+    ranked = ranked.slice(0, maxPlayers);
+  }
+
   const spots = candidates(map);
   if (spots.length < ranked.length) {
     throw new Error(`planHive: only ${spots.length} free spots for ${ranked.length} players - widen map.search`);
@@ -423,7 +438,10 @@ function planHive(players, opts = {}) {
 
   const notes = [];
   if (minScore != null) {
-    notes.push(`Seating players above ${minScore}m only - ${excluded} of ${players.length} left out.`);
+    notes.push(`Seating players above ${minScore}m only - ${excluded} of ${players.length} below the threshold.`);
+  }
+  if (cappedOut.length) {
+    notes.push(`Capped at ${maxPlayers} players - ${cappedOut.length} more qualified but did not fit this plan. Raise it with \`/hive cap\`.`);
   }
 
   return {
@@ -431,6 +449,8 @@ function planHive(players, opts = {}) {
     warnings: [...check.warnings, ...notes],
     errors: check.errors, ok: check.ok, map, policy,
     seated: ordered.length, excluded, minScore,
+    capped: cappedOut.length,
+    cappedNames: cappedOut.map((p) => p.name),
   };
 }
 
