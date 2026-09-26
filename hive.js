@@ -257,16 +257,31 @@ function candidates(map) {
 function assign(ranked, spots, map, policy = POLICY) {
   // Note: map may come from mapstore (data/map.json) or the MAP constant below.
   // Both normalise to entries with x, y, w, h as the lowest corner.
-  const remaining = spots.map((s) => ({ ...s }));
   const assigned = [];
 
-  // Every (player, spot) pair, sorted by cost - the global-greedy order.
+  // CANDIDATE PRUNING.
+  //
+  // Scoring every player against every spot is ~35,000 pairs at this size, each
+  // with two Math.hypot calls, and it dominates the run time. But a player is
+  // only ever seated near their bear: if a spot 3 tiles out is free, no solver
+  // picks one 15 tiles out. So each player considers only their NEAREST_K
+  // cheapest spots. That is the whole search space they could win anyway, and
+  // it cuts the pair list by roughly 90%.
+  const NEAREST_K = 40;
   const pairs = [];
+  const seen = new Set();
+
   ranked.forEach((p, pi) => {
+    const local = [];
     spots.forEach((s, si) => {
       const r = placementCost(p, s, map, policy);
-      if (Number.isFinite(r.cost)) pairs.push({ pi, si, cost: r.cost, travel: r.travel });
+      if (!Number.isFinite(r.cost)) return;
+      local.push({ si, cost: r.cost, travel: r.travel });
     });
+    local.sort((a, b) => a.cost - b.cost);
+    for (const c of local.slice(0, NEAREST_K)) {
+      pairs.push({ pi, si: c.si, cost: c.cost, travel: c.travel });
+    }
   });
   pairs.sort((a, b) => a.cost - b.cost);
 
@@ -281,7 +296,15 @@ function assign(ranked, spots, map, policy = POLICY) {
 
   // Repair: try pairwise player swaps and single-player relocations that
   // reduce total cost. A handful of passes is plenty at this size.
-  const costOf = (p, spot) => placementCost(p, spot, map, policy).cost;
+  // Cost is memoised per (player, spot) - placementCost recomputes two hypots
+  // every call, and this loop calls it an enormous number of times.
+  const memo = new Map();
+  const costOf = (p, spot) => {
+    const k = `${p.name}|${spot.x},${spot.y}`;
+    let v = memo.get(k);
+    if (v === undefined) { v = placementCost(p, spot, map, policy).cost; memo.set(k, v); }
+    return v;
+  };
   for (let pass = 0; pass < 6; pass++) {
     let improved = false;
     for (let i = 0; i < assigned.length; i++) {
