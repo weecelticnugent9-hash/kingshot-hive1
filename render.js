@@ -147,7 +147,11 @@ function createCanvas(width, height, bg = [255, 255, 255, 255]) {
     /** Draw text as filled glyph blocks, centred on (cx, cy). */
     textCentred(str, cx, cy, colour, scale = 1) {
       const s = String(str).toUpperCase();
-      const total = s.length * (W + 1) * scale - scale;
+      // Each glyph occupies W*scale px, then a gap of `scale` px, so the
+      // advance is (W+1)*scale. The trailing gap is not drawn, hence the -scale.
+      let total = 0;
+      for (const ch of s) total += (W + 1) * scale;
+      total -= scale;
       let x = Math.round(cx - total / 2);
       const y = Math.round(cy - (H * scale) / 2);
       for (const ch of s) {
@@ -167,6 +171,11 @@ function createCanvas(width, height, bg = [255, 255, 255, 255]) {
         x += (W + 1) * scale;
       }
       return total;
+    },
+    /** Width in pixels that textCentred() would draw for this string. */
+    textWidth(str, scale = 1) {
+      const n = String(str).length;
+      return n === 0 ? 0 : n * (W + 1) * scale - scale;
     },
     text(str, x, y, colour, scale = 1) {
       let cx = x;
