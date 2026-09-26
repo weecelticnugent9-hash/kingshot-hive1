@@ -377,7 +377,22 @@ function planHive(players, opts = {}) {
 
   if (!players || !players.length) throw new Error('planHive: roster is empty');
 
-  const ranked = rankPlayers(players, policy);
+  // Only seat players who score enough to earn a spot. Anyone below the
+  // threshold is left out of the layout entirely, so the plan covers the
+  // hive that actually matters rather than the whole alliance.
+  const minScore = policy.minScore != null ? policy.minScore : null;
+  const eligible = minScore == null
+    ? players
+    : players.filter((p) => (Number(p.score) || 0) > minScore);
+
+  const excluded = players.length - eligible.length;
+  if (!eligible.length) {
+    throw new Error(
+      `planHive: no players above the ${minScore}m threshold (roster has ${players.length}).`
+    );
+  }
+
+  const ranked = rankPlayers(eligible, policy);
   const spots = candidates(map);
   if (spots.length < ranked.length) {
     throw new Error(`planHive: only ${spots.length} free spots for ${ranked.length} players - widen map.search`);
@@ -392,7 +407,17 @@ function planHive(players, opts = {}) {
     return da || a.travel - b.travel;
   });
 
-  return { assignments: ordered, ranked, warnings: check.warnings, errors: check.errors, ok: check.ok, map, policy };
+  const notes = [];
+  if (minScore != null) {
+    notes.push(`Seating players above ${minScore}m only - ${excluded} of ${players.length} left out.`);
+  }
+
+  return {
+    assignments: ordered, ranked,
+    warnings: [...check.warnings, ...notes],
+    errors: check.errors, ok: check.ok, map, policy,
+    seated: ordered.length, excluded, minScore,
+  };
 }
 
 /** Human-readable lines for a Discord message. */
