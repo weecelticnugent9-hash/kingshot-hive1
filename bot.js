@@ -124,7 +124,11 @@ const commands = [
     .addSubcommand((s) => s.setName('sync').setDescription('Pull your alliance roster from MightPulse and update power/activity')
       .addBooleanOption((o) => o.setName('create').setDescription('Also create players who are not in the roster yet')))
     .addSubcommand((s) => s.setName('spots').setDescription('Read every member\'s map coordinates from MightPulse'))
-    .addSubcommand((s) => s.setName('pulse').setDescription('Test the MightPulse connection and show the rate-limit usage')),
+    .addSubcommand((s) => s.setName('pulse').setDescription('Test the MightPulse connection and show the rate-limit usage'))
+    .addSubcommand((s) => s.setName('dupes').setDescription('Find players whose names look like duplicates')
+      .addBooleanOption((o) => o.setName('merge').setDescription('Merge each group down to one player')))
+    .addSubcommand((s) => s.setName('cap').setDescription('Limit how many players the planner seats')
+      .addIntegerOption((o) => o.setName('players').setDescription('Max players in the plan (0 = no limit)').setRequired(true))),
 
   new SlashCommandBuilder().setName('advisor').setDescription('What should this player upgrade next?')
     .addStringOption((o) => o.setName('governor_id').setDescription('Governor id (from their profile)').setRequired(true))
