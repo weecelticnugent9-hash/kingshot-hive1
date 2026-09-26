@@ -620,8 +620,11 @@ client.on('interactionCreate', async (interaction) => {
       const result = runPlan();
       const png = renderPNG(result, { title: 'Kingshot hive plan' });
       const file = new AttachmentBuilder(png, { name: 'hive-plan.png' });
+      const seatNote = result.minScore != null
+        ? `Seating **${result.seated}** players above **${result.minScore}m** - ${result.excluded} left out.\n`
+        : '';
       return interaction.editReply({
-        content: `**Draft layout** - ${result.assignments.length} players\n${renderText(result)}`,
+        content: `**Draft layout** - ${result.assignments.length} players\n${seatNote}${renderText(result)}`,
         files: [file],
       });
     }
