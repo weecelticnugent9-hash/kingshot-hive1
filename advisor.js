@@ -122,20 +122,32 @@ function candidates(state) {
   }
 
   // ------------------------------------------------------- hero gear mastery
+  //
+  // Mastery grants no stat of its own - it raises the enhancement ceiling, and
+  // the stats come from the levels it unlocks. So scoring it at gain 0 made it
+  // vanish from every list, because the ranking filters on gain > 0. Instead,
+  // score it by the average stat gain per enhancement level at that point on
+  // the curve, which is what the hammers actually buy you access to.
   for (const g of state.gear || []) {
     const from = g.mastery || 0;
     if (from >= T.FORGEHAMMER.maxLevel) continue;
     const to = from + 1;
     const step = T.forgehammerStep(from, to);
+
+    // Look ahead over the next few enhancement levels to estimate the value
+    // of lifting the ceiling.
+    const enh = g.enhancement || 0;
+    const window = 5;
+    const bonusStep = T.GEAR_STATS.bonusStep(enh, Math.min(enh + window, T.GEAR_XP.maxLevel), g.quality || 'auto');
+    const gain = Math.max(0.5, bonusStep.bonus / window);   // never zero: it is real progress
+
     out.push({
       pool: 'hero',
       kind: 'mastery',
       label: `${g.troop} ${g.slot} mastery ${from} → ${to}`,
       materials: { forgehammers: step.hammers, mythicGear: step.mythic },
-      // Mastery itself grants no listed %; its value is unlocking the gear
-      // level ceiling, which is where the stat bonus comes from.
-      gain: 0,
-      gainUnit: 'unlocks higher enhancement',
+      gain,
+      gainUnit: '% stat unlocked per level',
       note: to === RULES.mastery.mythicGearFromLevel ? 'Now needs Mythic Gear (cheap for you)' : null,
       state: g,
     });
@@ -228,17 +240,23 @@ function scoreOf(candidate, materials, state) {
   const cost = costWithinPool(candidate);
   const aff = affordability(materials, candidate);
 
-  // Red gear only surfaces once the per-piece Mithril threshold is met, or the
-  // shortfall is small enough to close with a store purchase.
+  // Red gear (Mithril) is silent by default.
+  //
+  // It only ever appears when it is genuinely actionable: either the player
+  // already holds enough, or they are within `nearMissAllowance` of the cost.
+  // Anything further out is suppressed entirely - no "keep gathering" nag,
+  // no placeholder line. Mithril is gathered in the background, so the advisor
+  // says nothing about it until a store top-up would actually close the gap.
   let gated = false;
   let gateReason = null;
   if (candidate.pool === 'red') {
     const r = RULES.red;
     const need = r.mithrilPerPiece * Math.max(1, state.piecesPushing || 1);
     const held = materials.mithril || 0;
-    if (candidate.kind === 'imbuement' && held + r.nearMissAllowance * Math.max(1, state.piecesPushing || 1) < need) {
+    const closeEnough = held + r.nearMissAllowance * Math.max(1, state.piecesPushing || 1) >= need;
+    if (!closeEnough) {
       gated = true;
-      gateReason = `Hold ~${need} Mithril for this piece (you have ${held}) - keep gathering`;
+      gateReason = null;          // silent: not surfaced anywhere
     }
   }
 
