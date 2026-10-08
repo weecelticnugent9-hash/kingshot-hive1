@@ -1,6 +1,0 @@
-# Anything that must NOT be uploaded to a host or committed to git.
-node_modules/
-data/
-*.log
-.env
-.env.*
